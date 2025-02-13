@@ -14,6 +14,8 @@ using System.Runtime.CompilerServices;
 using System;
 using Unity.Mathematics;
 using Game.Components;
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace MiscMod
 {
@@ -116,6 +118,49 @@ namespace MiscMod
             }
             return string.Join("\n", parts);
 
+        }
+    }
+    [HarmonyPatch]
+    class MaterialEnergyPatcher
+    {
+        [HarmonyPatch(typeof(Def), "AddMatInfo")]
+        [HarmonyPostfix]
+        private static void AddMatInfoPatch(Def __instance, StringBuilder sb)
+        {
+            // going to be a bit annoying to patch this, but oh well.
+            // added parts are:
+            // sb.Append(T.MatEnergyOutput);
+            // sb.Append(": ");
+            // sb.Append(Texts.WithColor(matType.EnergyOutput.ToString(), Texts.TMPColorRed));
+
+            // so to match with regexp, we match on the prefix and the end of the line
+            var curSbValue = sb.ToString();
+            var pat = @$"{T.MatEnergyOutput}.*$";
+            var numberPat = @"\d+(\.\d+)?";
+            var match = Regex.Match(curSbValue, pat, RegexOptions.Multiline);
+            if (!match.Success)
+            {
+                return;
+            }
+            // There is also a number in the color, so carefully only get the last one.
+            var numberInside = Regex.Matches(match.Value, numberPat).Last();
+            if (!numberInside.Success)
+            {
+                MoreNumbersPatcher.LogErrOnce($"For def {__instance.Id}, found an energy output section '{match.Value}' but didn't find a number in it. This error will only be reported once per def.");
+                return;
+            }
+            var num = float.Parse(numberInside.Value);
+            // this is kW*min, so divide by 60 for kWh.
+            var kWh = EnergyOutputToKWH(num);
+            var adjustedValue = $"{numberInside.Value} ({kWh:f1} kWh in Matter Reactor)";
+            // Finally, one final careful replace
+            sb.Replace(numberInside.Value, adjustedValue, match.Index + numberInside.Index, numberInside.Length);
+        }
+        public static float EnergyOutputToKWH(float x)
+        {
+            // We include the 0.25 reactor efficiency constant for convenience, so that
+            // this is straightforwardly the power produced when burning in a small matter reactor at the normal 100% efficiency.
+            return x / (60f / 4f);
         }
     }
 }
