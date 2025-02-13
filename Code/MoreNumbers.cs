@@ -163,4 +163,45 @@ namespace MiscMod
             return x / (60f / 4f);
         }
     }
+    [HarmonyPatch]
+    class BatteryDataPatcher
+    {
+
+        // This section handles all buildings, so we inject our battery section after it.
+        [HarmonyPatch(typeof(Def), nameof(Def.AppendConstructableDesc))]
+        [HarmonyPostfix]
+        static void AppendConstructableDescPatch(Def __instance, StringBuilder sb, bool forBuildTool)
+        {
+            // for some reason the public version isn't static, so we use the private one:
+            int nameH = (int)AccessTools.Field(typeof(BatteryComp), "nameHash").GetValue(typeof(BatteryComp));
+            var batteryConfig = __instance.ComponentConfigFor(nameH, warn: false);
+            if (batteryConfig == null)
+            {
+                return; // not a battery
+            }
+            // am I meant to just do this and pray?
+            var batteryOutput = batteryConfig.GetInt(Animator.StringToHash("EnergyOutput"));
+
+            var electricNodeConfig = __instance.ComponentConfigFor(Animator.StringToHash("ElectricNode"));
+            if (electricNodeConfig == null)
+            {
+                MoreNumbersPatcher.LogErrOnce($"Def {__instance} has a Battery component but no ElectricNode component. Ignoring it.");
+                return;
+            }
+            var maxCharge = electricNodeConfig.GetInt(Animator.StringToHash("BatteryMaxCharge"));
+            var isBattery = electricNodeConfig.GetBool(Animator.StringToHash("IsBattery"));
+            if (maxCharge > 0 && !isBattery)
+            {
+                MoreNumbersPatcher.LogErrOnce($"Def {__instance} has a Battery component with BatteryMaxCharge={maxCharge} but also has IsBattery={isBattery}. This is unexpected to me.");
+            }
+
+            sb.Append(Game.Input.GlyphMap.BRHR);
+            sb.Append($"Acts as a {Texts.WithColor("battery", Texts.TMPColorYellow)} with capacity {(int)BatteryCapacityToKWH(maxCharge)}kWh and max output {batteryOutput}kW ({BatteryCapacityToKWH(maxCharge) / batteryOutput:f1}h to fully discharge).");
+        }
+        public static float BatteryCapacityToKWH(float x)
+        {
+            // For some reason the unit of these is 10 kW*minute (BatteryComp.EstimateRemainingTime). 
+            return x / 6;
+        }
+    }
 }
