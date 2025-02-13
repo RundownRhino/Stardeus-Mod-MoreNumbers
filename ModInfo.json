@@ -1,0 +1,11 @@
+{
+    "Id" : "MoreNumbers",
+    // Change this to true in order to share your mod on Steam Workshop
+    "SteamWorkshop" : false,
+    // Please create your own ModCover.jpg as well
+    "Name" : "MoreNumbers",
+    "Description" : "Adds more helpful info everywhere.",
+    "ModVersion" : "0.1.0",
+    "GameVersion" : "0.12.7",
+    "Dependencies" : [ "Core" ]
+}
