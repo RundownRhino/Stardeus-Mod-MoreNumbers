@@ -13,6 +13,7 @@ using Game.Utils;
 using System.Runtime.CompilerServices;
 using System;
 using Unity.Mathematics;
+using Game.Components;
 
 namespace MiscMod
 {
@@ -73,35 +74,45 @@ namespace MiscMod
             AddToTooltip(el, x => ExtraPFData());
         }
 
+
+        public static float MaxEnginePush()
+        {
+            return A.S.Sys.ShipNav.Engines
+            .Where(engine => engine.IsPowered && engine.WorksIn("Sector"))
+            .Select(engine => engine.PowerWithUpgrades)
+            .Sum();
+        }
         public static string ExtraPFData()
         {
             // duplicating calculations from ShipSys.OnTick
             var ShipMass = A.S.Sys.Areas.TotalAreaSize;
-            var engineForce = A.S.Sys.ShipNav.EnginePush();
             float shipSpeedMin = Tunables.ShipSpeedMin;
             float shipSpeedMax = Tunables.ShipSpeedMax;
-            var trueVelocity = Equations.EnginePush(engineForce, ShipMass, shipSpeedMin, shipSpeedMax);
-            // from Equations.EnginePush
-            float rawAccel = engineForce / (float)ShipMass;
-            float adjustedAccel = math.sqrt(rawAccel);
-            var expectedVelocity = math.lerp(shipSpeedMin, shipSpeedMax, Maths.Clamp(adjustedAccel, 0f, 1f));
+
+            // same but for max
+            var maxEngineForce = MaxEnginePush();
+            var trueMaxVelocity = Equations.EnginePush(maxEngineForce, ShipMass, shipSpeedMin, shipSpeedMax);
+            float rawMaxAccel = maxEngineForce / ShipMass;
+            float adjustedMaxAccel = math.sqrt(rawMaxAccel);
+            var expectedMaxVelocity = math.lerp(shipSpeedMin, shipSpeedMax, Maths.Clamp(adjustedMaxAccel, 0f, 1f));
+
             List<string> parts = new()
             {
                 $"Ship mass: {ShipMass} tiles",
-                $"Raw engine force: {engineForce} kN",
-                $"Raw acceleration: {rawAccel} kN/tile",
-                $"Speed factor (sqrt of acceleration): {adjustedAccel}",
+                $"Max raw engine force: {maxEngineForce} kN",
+                $"Max raw acceleration: {rawMaxAccel} kN/tile",
+                $"Max speed factor (sqrt of acceleration): {adjustedMaxAccel}",
                 $"Speed range: {shipSpeedMin} to {shipSpeedMax}",
-                $"Final speed: {trueVelocity}"
+                $"Final max speed: {trueMaxVelocity}"
             };
-            if (math.abs(expectedVelocity - trueVelocity) > 1e-6)
+            if (math.abs(expectedMaxVelocity - trueMaxVelocity) > 1e-6)
             {
-                LogErrOnce($"The velocity calculation doesn't match - probably the game changed and the mod needs to be updated. Expected to get {expectedVelocity} but game returned {trueVelocity}.");
-                parts.Append($"Warning: velocity calculation doesn't match! The mod must be outdated.");
+                LogErrOnce($"The velocity calculation doesn't match - probably the game changed and the mod needs to be updated. Expected to get {expectedMaxVelocity} but game returned {trueMaxVelocity}.");
+                parts.Append($"Warning: velocity calculation doesn't match! The mod's math must be outdated.");
             }
-            if (trueVelocity == shipSpeedMax)
+            if (trueMaxVelocity == shipSpeedMax)
             {
-                parts.Append($"You have hit the ship velocity upper limit.");
+                parts.Append($"You are currently at the ship velocity upper limit.");
             }
             return string.Join("\n", parts);
 
