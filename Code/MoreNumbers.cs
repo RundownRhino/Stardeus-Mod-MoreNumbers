@@ -16,6 +16,7 @@ using Unity.Mathematics;
 using Game.Components;
 using System.Text;
 using System.Text.RegularExpressions;
+using Game.Systems.Crafting;
 
 namespace MiscMod
 {
@@ -202,6 +203,24 @@ namespace MiscMod
         {
             // For some reason the unit of these is 10 kW*minute (BatteryComp.EstimateRemainingTime). 
             return x / 6;
+        }
+    }
+
+    [HarmonyPatch]
+    class DeficitSilencePatcher
+    {
+
+        // This section handles all buildings, so we inject our battery section after it.
+        [HarmonyPatch(typeof(MultiCrafterComp), nameof(MultiCrafterComp.NotifyMatDeficit))]
+        [HarmonyPrefix]
+        static bool NotifyMatDeficitPatch(MultiCrafterComp __instance, MatType type)
+        {
+            // Silence missing material notifications for unlimited orders
+            if (__instance.CurrentOrder?.Demand?.Type == CraftingDemandType.Unlimited)
+            {
+                return false; // skip
+            }
+            return true;
         }
     }
 }
