@@ -17,6 +17,10 @@ using Game.Components;
 using System.Text;
 using System.Text.RegularExpressions;
 using Game.Systems.Crafting;
+using Game.UI;
+using Game.Data.Space;
+using Game.Systems.Space;
+using Game.CodeGen;
 
 namespace MiscMod
 {
@@ -210,7 +214,6 @@ namespace MiscMod
     class DeficitSilencePatcher
     {
 
-        // This section handles all buildings, so we inject our battery section after it.
         [HarmonyPatch(typeof(MultiCrafterComp), nameof(MultiCrafterComp.NotifyMatDeficit))]
         [HarmonyPrefix]
         static bool NotifyMatDeficitPatch(MultiCrafterComp __instance, MatType type)
@@ -221,6 +224,48 @@ namespace MiscMod
                 return false; // skip
             }
             return true;
+        }
+    }
+
+    [HarmonyPatch]
+    class RegionMinersPatcher
+    {
+        [HarmonyPatch(typeof(UISpaceObject), "OnHoverRegion")]
+        [HarmonyPostfix]
+        // This patch is theoretically pretty expensive, iterating over all planets in a region.
+        static void OnHoverRegionPatch(UISpaceObject __instance, StringBuilder sb, SpaceObject targetSO)
+        {
+            bool anyMines = false;
+            foreach (SpaceSector sector in targetSO.Region.Sectors)
+            {
+                // similar to OnHoverSector
+                var sectorSO = sector.SO;
+                if (!(sectorSO.IsVisited && sectorSO.HasChildren))
+                {
+                    continue;
+                }
+                // similar to OnHoverLocal
+                foreach (SpaceObject child in sectorSO.Children)
+                {
+                    // Not sure why the original code makes a specific check for this SO type, but okay
+                    if (child.Type.IdH == SpaceObjectTypeIdH.ResourceUnknown || !A.S.Sys.Planets.TryGetResourceFor(child, out var resource, out var mt))
+                    {
+                        continue;
+                    }
+                    if (!(resource.Unretrieved >= 0f && resource.UnretrievedMax > 0))
+                    {
+                        continue;
+                    }
+                    string entry = Units.XOutOfY((int)math.ceil(resource.Unretrieved), resource.UnretrievedMax);
+                    if (!anyMines)
+                    {
+                        anyMines = true;
+                        sb.AppendFormat("Autodrills in this region:\n");
+                    }
+                    sb.AppendFormat(" - <b>{0}</b> ({1})\n", mt.NameT, Texts.Green(entry));
+                }
+
+            }
         }
     }
 }
