@@ -262,7 +262,7 @@ namespace MiscMod
                         anyMines = true;
                         sb.AppendFormat("Autodrills in this region:\n");
                     }
-                    sb.AppendFormat(" - <b>{0}</b> ({1})\n", mt.NameT, Texts.Green(entry));
+                    sb.AppendFormat(" - {0}: <b>{1}</b> ({2})\n", Texts.Accented2(sectorSO.DisplayName), mt.NameT, Texts.Green(entry));
                 }
 
             }
