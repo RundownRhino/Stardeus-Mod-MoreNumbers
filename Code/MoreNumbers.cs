@@ -22,18 +22,12 @@ using Game.Data.Space;
 using Game.Systems.Space;
 using Game.CodeGen;
 
+using static MiscMod.Utils;
+
 namespace MiscMod
 {
-    [HarmonyPatch]
-    public sealed class MoreNumbersPatcher
+    public class Utils
     {
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSplashScreen)]
-        private static void Register()
-        {
-            LogWarn("Being registered, applying the Harmony patches.");
-            var harmony = new Harmony("com.MoreNumbers.patch");
-            harmony.PatchAll();
-        }
         public static void LogWarn(string msg)
         {
             D.Warn($"[MoreNumbers] {msg}");
@@ -54,7 +48,6 @@ namespace MiscMod
             errorsLogged.Add(key);
             LogErr(msg);
         }
-
         public static void AddToTooltip(UDB udb, Func<UDB, string> tooltip)
         {
             Func<UDB, string> oldTooltipFunction = udb.TooltipFunction;
@@ -64,6 +57,30 @@ namespace MiscMod
                 newTooltipFunction = x => $"{oldTooltipFunction(x)}\n{tooltip(x)}";
             }
             udb.TooltipFunction = newTooltipFunction;
+        }
+
+        public static string KWDRepr(float kwd)
+        {
+            if (math.abs(kwd) >= 1e6)
+            {
+                return $"{kwd / 1e6:0.##}GWd";
+            }
+            if (math.abs(kwd) >= 1000)
+            {
+                return $"{kwd / 1000:0.##}MWd";
+            }
+            return $"{kwd:0.##}kWd";
+        }
+    }
+    [HarmonyPatch]
+    public sealed class MoreNumbersPatcher
+    {
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSplashScreen)]
+        private static void Register()
+        {
+            LogWarn("Being registered, applying the Harmony patches.");
+            var harmony = new Harmony("com.MoreNumbers.patch");
+            harmony.PatchAll();
         }
 
         [HarmonyPatch(typeof(ShipNavSys), nameof(ShipNavSys.GetUIDetails))]
@@ -151,21 +168,21 @@ namespace MiscMod
             var numberInside = Regex.Matches(match.Value, numberPat).Last();
             if (!numberInside.Success)
             {
-                MoreNumbersPatcher.LogErrOnce($"For def {__instance.Id}, found an energy output section '{match.Value}' but didn't find a number in it. This error will only be reported once per def.");
+                LogErrOnce($"For def {__instance.Id}, found an energy output section '{match.Value}' but didn't find a number in it. This error will only be reported once per def.");
                 return;
             }
             var num = float.Parse(numberInside.Value);
-            // this is kW*min, so divide by 60 for kWh.
-            var kWh = EnergyOutputToKWH(num);
-            var adjustedValue = $"{numberInside.Value} ({kWh:f1} kWh in Matter Reactor)";
+            var kWd = EnergyOutputToKWD(num);
+            var adjustedValue = $"{numberInside.Value} ({KWDRepr(kWd)} in Matter Reactor)";
             // Finally, one final careful replace
             sb.Replace(numberInside.Value, adjustedValue, match.Index + numberInside.Index, numberInside.Length);
         }
-        public static float EnergyOutputToKWH(float x)
+        public static float EnergyOutputToKWD(float x)
         {
+            // this is kW*10min (an energy grid tick is every 10 minutes), so divide by 6 for kWh.
             // We include the 0.25 reactor efficiency constant for convenience, so that
             // this is straightforwardly the power produced when burning in a small matter reactor at the normal 100% efficiency.
-            return x / (60f / 4f);
+            return x / (24f * 6f / 4f);
         }
     }
     [HarmonyPatch]
@@ -190,23 +207,23 @@ namespace MiscMod
             var electricNodeConfig = __instance.ComponentConfigFor(Animator.StringToHash("ElectricNode"));
             if (electricNodeConfig == null)
             {
-                MoreNumbersPatcher.LogErrOnce($"Def {__instance} has a Battery component but no ElectricNode component. Ignoring it.");
+                LogErrOnce($"Def {__instance} has a Battery component but no ElectricNode component. Ignoring it.");
                 return;
             }
             var maxCharge = electricNodeConfig.GetInt(Animator.StringToHash("BatteryMaxCharge"));
             var isBattery = electricNodeConfig.GetBool(Animator.StringToHash("IsBattery"));
             if (maxCharge > 0 && !isBattery)
             {
-                MoreNumbersPatcher.LogErrOnce($"Def {__instance} has a Battery component with BatteryMaxCharge={maxCharge} but also has IsBattery={isBattery}. This is unexpected to me.");
+                LogErrOnce($"Def {__instance} has a Battery component with BatteryMaxCharge={maxCharge} but also has IsBattery={isBattery}. This is unexpected to me.");
             }
 
             sb.Append(Game.Input.GlyphMap.BRHR);
-            sb.Append($"Acts as a {Texts.WithColor("battery", Texts.TMPColorYellow)} with capacity {(int)BatteryCapacityToKWH(maxCharge)}kWh and max output {batteryOutput}kW ({BatteryCapacityToKWH(maxCharge) / batteryOutput:f1}h to fully discharge).");
+            sb.Append($"Acts as a {Texts.WithColor("battery", Texts.TMPColorYellow)} with capacity {KWDRepr(BatteryCapacityToKWD(maxCharge))} and max output {batteryOutput}kW ({BatteryCapacityToKWD(maxCharge) / batteryOutput:0.##}d to fully discharge).");
         }
-        public static float BatteryCapacityToKWH(float x)
+        public static float BatteryCapacityToKWD(float x)
         {
-            // For some reason the unit of these is 10 kW*minute (BatteryComp.EstimateRemainingTime). 
-            return x / 6;
+            // The unit of these is 10 kW*minute, no constant (BatteryComp.EstimateRemainingTime). 
+            return x / (6 * 24);
         }
     }
 
