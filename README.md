@@ -5,4 +5,4 @@
 - the "energy output" section on fuels shows a conversion to kilowatt-days instead of just the internal units
 - descriptions for all buildings that act as a battery have a section with their battery capacity, output, and time-to-discharge.
 - crafters will no longer send any "missing materials" notifications for unlimited orders
-- Hovering over a region in universe map will list all autodrills in that region (much like how hovering over a sector in region view does).
+- Hovering over a region in universe map will list all autodrills in that region (much like how hovering over a sector in region view does), and also a list of all the known blackholes in this region.

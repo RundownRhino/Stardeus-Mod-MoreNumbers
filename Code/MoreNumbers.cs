@@ -245,13 +245,14 @@ namespace MiscMod
     }
 
     [HarmonyPatch]
-    class RegionMinersPatcher
+    class RegionTooltipPatcher
     {
         [HarmonyPatch(typeof(UISpaceObject), "OnHoverRegion")]
         [HarmonyPostfix]
         // This patch is theoretically pretty expensive, iterating over all planets in a region.
         static void OnHoverRegionPatch(UISpaceObject __instance, StringBuilder sb, SpaceObject targetSO)
         {
+            // Add data about autodrill rigs:
             bool anyMines = false;
             foreach (SpaceSector sector in targetSO.Region.Sectors)
             {
@@ -277,11 +278,36 @@ namespace MiscMod
                     if (!anyMines)
                     {
                         anyMines = true;
-                        sb.AppendFormat("Autodrills in this region:\n");
+                        sb.Append($"{Game.Input.GlyphMap.BRHR}Autodrills in this region:\n");
                     }
                     sb.AppendFormat(" - {0}: <b>{1}</b> ({2})\n", Texts.Accented2(sectorSO.DisplayName), mt.NameT, Texts.Green(entry));
                 }
 
+            }
+            // Add data about blackholes:
+            bool anyBH = false;
+            foreach (SpaceSector sector in targetSO.Region.Sectors)
+            {
+                var sectorSO = sector.SO;
+                // We don't check sectorSO.IsVisited because it's too strict - we want to just check whether
+                // the player knows about that sector (which I think is equivalent to whether it's generated at all, see ScanSurroundings).
+                if (sectorSO.Type.IdH == SpaceObjectTypeIdH.BlackHole)
+                {
+                    if (!anyBH)
+                    {
+                        anyBH = true;
+                        sb.Append($"{Game.Input.GlyphMap.BRHR}Known black holes in this region: ");
+                    }
+                    else
+                    {
+                        sb.Append(", ");
+                    }
+                    sb.AppendFormat("{0}", Texts.Accented2(sectorSO.DisplayName));
+                }
+            }
+            if (anyBH)
+            {
+                sb.Append(".\n");
             }
         }
     }
